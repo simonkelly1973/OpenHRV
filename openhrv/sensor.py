@@ -7,7 +7,16 @@ from PySide6.QtBluetooth import (
 )
 from math import ceil
 from openhrv.utils import get_sensor_address, get_sensor_remote_address
+import time
 
+import rticonnextdds_connector as rti
+
+from openhrv.Numeric import Numeric
+from openhrv.DeviceIdentity import DeviceIdentity
+
+connector = rti.Connector("iceParticipantLibrary::iceParticipant", "openhrv/icepython.xml")
+deviceIdentityOutput = connector.get_output("DeviceIdentityPublisher::DeviceIdentityWriter")
+numericOutput = connector.get_output("NumericPublisher::NumericWriter")
 
 class SensorScanner(QObject):
 
@@ -65,6 +74,17 @@ class SensorClient(QObject):
         self.DISABLE_NOTIFICATION = QByteArray.fromHex(b"0000")
         self.HR_SERVICE = QBluetoothUuid.ServiceClassUuid.HeartRate
         self.HR_CHARACTERISTIC = QBluetoothUuid.CharacteristicType.HeartRateMeasurement
+
+        self.ibi_numeric = Numeric()
+        self.ibi_deviceIdentity = DeviceIdentity()
+
+        self.ibi_numeric.update_fields({'unique_device_identifier': 'XBDd5KkfPolarStrapfiIjeij87', 'metric_id': 'MDC_IBI', 'vendor_metric_id': '', 'instance_id': 0, 'unit_id': 'MDC_DIM_MILLI_SEC', 'value': 0, 'device_time': {'sec': 0, 'nanosec': 0}, 'presentation_time': {'sec': 0, 'nanosec': 0}})
+        
+        self.ibi_deviceIdentity.update_fields({'unique_device_identifier': 'XBDd5KkfPolarStrapfiIjeij87', 'manufacturer': 'Polar', 'model': 'H10 Strap', 'serial_number': '', 'icon': {'content_type': 'image/png', 'image': []}, 'build': 'Testing Version 0.0', 'operating_system': 'Polar OS'})
+        self.ibi_deviceIdentity.set_image('openhrv/openhrvlogo.png')
+
+        deviceIdentityOutput.instance.set_dictionary(self.ibi_deviceIdentity.publish_fields())
+        deviceIdentityOutput.write()
 
     def _sensor_address(self):
         return get_sensor_remote_address(self.client)
@@ -212,3 +232,13 @@ class SensorClient(QObject):
             # transmit data in milliseconds.
             ibi = ceil(ibi / 1024 * 1000)
             self.ibi_update.emit(ibi)
+            
+            self.ibi_numeric.value = ibi
+            self.ibi_numeric.device_time.sec = round(time.time())
+            self.ibi_numeric.presentation_time.sec = round(time.time())
+            print(ibi)
+
+            numericOutput.instance.set_dictionary(self.ibi_numeric.publish_fields())
+
+            numericOutput.write()
+            
